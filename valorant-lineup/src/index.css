@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.lineup-marker {
+  @apply absolute w-4 h-4 rounded-full cursor-pointer transform -translate-x-1/2 -translate-y-1/2 transition-transform hover:scale-125;
+}
+
+.lineup-marker.position {
+  @apply bg-blue-500 border-2 border-white;
+}
+
+.lineup-marker.target {
+  @apply bg-red-500 border-2 border-white;
+}
