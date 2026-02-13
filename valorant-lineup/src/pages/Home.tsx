@@ -28,7 +28,7 @@ export default function Home() {
     if (filters.map) params.append('map', filters.map);
     if (filters.ability) params.append('ability', filters.ability);
     
-    const res = await fetch(`http://localhost:3001/api/lineups?${params}`);
+    const res = await fetch(`/api/lineups?${params}`);
     const data = await res.json();
     setLineups(data);
   };

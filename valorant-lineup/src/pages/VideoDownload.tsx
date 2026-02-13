@@ -16,7 +16,7 @@ export default function VideoDownload() {
     setStatus('下载中...');
     
     try {
-      const res = await fetch('http://localhost:3001/api/download', {
+      const res = await fetch('/api/download', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, type: platform })

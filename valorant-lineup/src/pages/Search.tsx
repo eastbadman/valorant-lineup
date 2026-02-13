@@ -18,7 +18,7 @@ export default function Search() {
     if (!query.trim()) return;
     
     setSearched(true);
-    const res = await fetch(`http://localhost:3001/api/lineups?search=${encodeURIComponent(query)}`);
+    const res = await fetch(`/api/lineups?search=${encodeURIComponent(query)}`);
     const data = await res.json();
     setResults(data);
   };

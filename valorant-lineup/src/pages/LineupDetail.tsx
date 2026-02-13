@@ -25,7 +25,7 @@ export default function LineupDetail() {
   }, [id]);
 
   const fetchLineup = async () => {
-    const res = await fetch(`http://localhost:3001/api/lineups/${id}`);
+    const res = await fetch(`/api/lineups/${id}`);
     const data = await res.json();
     setLineup(data);
   };

@@ -1,85 +1,119 @@
 import express from 'express';
 import cors from 'cors';
-import Database from 'better-sqlite3';
+import mysql from 'mysql2/promise';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { users } from './users.js';
 
 const execAsync = promisify(exec);
 const app = express();
-const db = new Database('lineup.db');
+
+// MySQL 连接配置
+const pool = mysql.createPool({
+  host: '47.118.30.248',
+  port: 13306,
+  user: 'root',
+  password: 'd6eyRL22rn3kL3La',
+  database: 'valorant_lineup',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 app.use(cors());
 app.use(express.json());
 
 // 初始化数据库
-db.exec(`
-  CREATE TABLE IF NOT EXISTS lineups (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    agent TEXT NOT NULL,
-    map TEXT NOT NULL,
-    ability TEXT NOT NULL,
-    position_x REAL NOT NULL,
-    position_y REAL NOT NULL,
-    target_x REAL NOT NULL,
-    target_y REAL NOT NULL,
-    video_url TEXT,
-    video_path TEXT,
-    description TEXT,
-    author TEXT,
-    user_id INTEGER,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-  )
-`);
+async function initDatabase() {
+  try {
+    // 先创建用户表（因为 lineups 表引用它）
+    await users.init();
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    email TEXT UNIQUE,
-    avatar TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+    // 稍等一下确保 users 表创建完成
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 创建 lineups 表（不使用外键约束，避免创建顺序问题）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS lineups (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        agent VARCHAR(50) NOT NULL,
+        map VARCHAR(50) NOT NULL,
+        ability VARCHAR(50) NOT NULL,
+        position_x DECIMAL(5,2) NOT NULL,
+        position_y DECIMAL(5,2) NOT NULL,
+        target_x DECIMAL(5,2) NOT NULL,
+        target_y DECIMAL(5,2) NOT NULL,
+        video_url TEXT,
+        video_path TEXT,
+        description TEXT,
+        author VARCHAR(50),
+        user_id INT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    console.log('✅ Lineups table initialized');
+  } catch (err) {
+    console.error('❌ Error initializing database:', err.message);
+  }
+}
 
 // 种子数据
-const seedData = [
-  {
-    agent: 'Jett',
-    map: 'Ascent',
-    ability: 'Tailwind',
-    position_x: 0.3,
-    position_y: 0.4,
-    target_x: 0.7,
-    target_y: 0.3,
-    video_url: '',
-    description: '从B点楼梯冲向A点平台的快速入场lineup',
-    author: 'Admin',
-    user_id: null
+async function seedData() {
+  try {
+    const [rows] = await pool.query('SELECT COUNT(*) as count FROM lineups');
+    if (rows[0].count > 0) {
+      console.log('⏭️  Data already seeded');
+      return;
+    }
+
+    const seedData = [
+      {
+        agent: 'Jett',
+        map: 'Ascent',
+        ability: 'Tailwind',
+        position_x: 0.3,
+        position_y: 0.4,
+        target_x: 0.7,
+        target_y: 0.3,
+        video_url: '',
+        description: '从B点楼梯冲向A点平台的快速入场lineup',
+        author: 'Admin',
+        user_id: null
+      }
+    ];
+
+    for (const data of seedData) {
+      await pool.query(`
+        INSERT INTO lineups (agent, map, ability, position_x, position_y, target_x, target_y, video_url, description, author, user_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [data.agent, data.map, data.ability, data.position_x, data.position_y, data.target_x, data.target_y, data.video_url, data.description, data.author, data.user_id]);
+    }
+
+    console.log('✅ Initial data seeded');
+  } catch (err) {
+    console.error('❌ Error seeding data:', err.message);
   }
-];
-
-const insert = db.prepare(`
-  INSERT INTO lineups (agent, map, ability, position_x, position_y, target_x, target_y, video_url, description, author, user_id)
-  VALUES (@agent, @map, @ability, @position_x, @position_y, @target_x, @target_y, @video_url, @description, @author, @user_id)
-`);
-
-const count = db.prepare('SELECT COUNT(*) as count FROM lineups').get();
-if (count.count === 0) {
-  seedData.forEach(data => {
-    data.user_id = null;
-    insert.run(data);
-  });
-  console.log('Seeded initial data');
 }
 
 // ============ 用户相关API ============
 
 // 注册
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   const { username, password, email } = req.body;
-  const result = users.register(username, password, email);
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: '用户名和密码不能为空' });
+  }
+
+  if (username.length < 3 || username.length > 20) {
+    return res.status(400).json({ success: false, error: '用户名长度需在3-20位之间' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, error: '密码长度不能少于6位' });
+  }
+
+  const result = await users.register(username, password, email);
   if (result.success) {
     res.json({ success: true, user: { id: result.id, username } });
   } else {
@@ -88,9 +122,14 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 // 登录
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
-  const result = users.login(username, password);
+
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: '用户名和密码不能为空' });
+  }
+
+  const result = await users.login(username, password);
   if (result.success) {
     res.json({ success: true, user: result.user });
   } else {
@@ -101,11 +140,16 @@ app.post('/api/auth/login', (req, res) => {
 // ============ Lineup API ============
 
 // 获取lineup列表
-app.get('/api/lineups', (req, res) => {
+app.get('/api/lineups', async (req, res) => {
   const { agent, map, ability, search, user_id } = req.query;
-  let query = 'SELECT l.*, u.username as author_name FROM lineups l LEFT JOIN users u ON l.user_id = u.id WHERE 1=1';
+  let query = `
+    SELECT l.*, u.username as author_name
+    FROM lineups l
+    LEFT JOIN users u ON l.user_id = u.id
+    WHERE 1=1
+  `;
   const params = [];
-  
+
   if (agent) {
     query += ' AND l.agent LIKE ?';
     params.push(`%${agent}%`);
@@ -126,51 +170,87 @@ app.get('/api/lineups', (req, res) => {
     query += ' AND l.user_id = ?';
     params.push(user_id);
   }
-  
+
   query += ' ORDER BY l.created_at DESC';
-  
-  const lineups = db.prepare(query).all(...params);
-  res.json(lineups);
+
+  try {
+    const [lineups] = await pool.query(query, params);
+    res.json(lineups);
+  } catch (err) {
+    console.error('Error fetching lineups:', err);
+    res.status(500).json({ error: '获取lineup列表失败' });
+  }
 });
 
 // 获取单个lineup
-app.get('/api/lineups/:id', (req, res) => {
-  const lineup = db.prepare(`
-    SELECT l.*, u.username as author_name FROM lineups l 
-    LEFT JOIN users u ON l.user_id = u.id 
-    WHERE l.id = ?
-  `).get(req.params.id);
-  
-  if (lineup) {
-    res.json(lineup);
-  } else {
-    res.status(404).json({ error: 'Lineup not found' });
+app.get('/api/lineups/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT l.*, u.username as author_name
+      FROM lineups l
+      LEFT JOIN users u ON l.user_id = u.id
+      WHERE l.id = ?
+    `, [req.params.id]);
+
+    const lineup = rows[0];
+    if (lineup) {
+      res.json(lineup);
+    } else {
+      res.status(404).json({ error: 'Lineup not found' });
+    }
+  } catch (err) {
+    console.error('Error fetching lineup:', err);
+    res.status(500).json({ error: '获取lineup失败' });
   }
 });
 
 // 创建lineup
-app.post('/api/lineups', (req, res) => {
+app.post('/api/lineups', async (req, res) => {
   const { agent, map, ability, position_x, position_y, target_x, target_y, video_url, description, user_id } = req.body;
-  
-  const author = user_id ? db.prepare('SELECT username FROM users WHERE id = ?').get(user_id)?.username : 'Anonymous';
-  
-  const result = db.prepare(`
-    INSERT INTO lineups (agent, map, ability, position_x, position_y, target_x, target_y, video_url, description, author, user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(agent, map, ability, position_x, position_y, target_x, target_y, video_url || '', description || '', author, user_id || null);
-  
-  res.json({ id: result.lastInsertRowid, message: 'Lineup created successfully' });
+
+  if (!agent || !map || !ability) {
+    return res.status(400).json({ error: '角色、地图和技能不能为空' });
+  }
+
+  try {
+    // 获取用户名
+    let author = 'Anonymous';
+    if (user_id) {
+      const user = await users.getById(user_id);
+      if (user) {
+        author = user.username;
+      }
+    }
+
+    const [result] = await pool.query(`
+      INSERT INTO lineups (agent, map, ability, position_x, position_y, target_x, target_y, video_url, description, author, user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [agent, map, ability, position_x, position_y, target_x, target_y, video_url || '', description || '', author, user_id || null]);
+
+    res.json({
+      id: result.insertId,
+      message: 'Lineup created successfully',
+      author
+    });
+  } catch (err) {
+    console.error('Error creating lineup:', err);
+    res.status(500).json({ error: '创建lineup失败' });
+  }
 });
 
 // ============ 视频下载服务 ============
 
 app.post('/api/download', async (req, res) => {
   const { url, type } = req.body;
-  
+
+  if (!url) {
+    return res.status(400).json({ error: '视频URL不能为空' });
+  }
+
   try {
     let command;
     const outputPath = `./public/videos/${Date.now()}`;
-    
+
     if (type === 'youtube' || url.includes('youtube.com') || url.includes('youtu.be')) {
       // YouTube下载
       command = `yt-dlp -f best -o "${outputPath}.%(ext)s" "${url}"`;
@@ -180,15 +260,15 @@ app.post('/api/download', async (req, res) => {
     } else {
       return res.status(400).json({ error: '不支持的视频平台' });
     }
-    
+
     const { stdout, stderr } = await execAsync(command);
     console.log('Download stdout:', stdout);
     console.log('Download stderr:', stderr);
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       message: '视频下载成功',
-      path: outputPath 
+      path: outputPath
     });
   } catch (err) {
     console.error('Download error:', err);
@@ -196,7 +276,20 @@ app.post('/api/download', async (req, res) => {
   }
 });
 
+// 启动服务器
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+
+async function startServer() {
+  await initDatabase();
+  await seedData();
+
+  app.listen(PORT, () => {
+    console.log(`✅ Server running on http://localhost:${PORT}`);
+    console.log(`📡 MySQL connected to 47.118.30.248:13306`);
+  });
+}
+
+startServer().catch(err => {
+  console.error('❌ Failed to start server:', err);
+  process.exit(1);
 });
