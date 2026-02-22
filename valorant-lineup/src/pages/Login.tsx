@@ -22,6 +22,8 @@ export default function Login() {
       if (data.success) {
         // 保存用户信息和token
         setAuth(data.user, data.token);
+        // 触发登录事件，通知Navbar更新
+        window.dispatchEvent(new Event('userLogin'));
         navigate('/');
       }
     } catch (err: any) {

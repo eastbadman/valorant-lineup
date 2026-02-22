@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { getUser, clearAuth, isLoggedIn } from '../api';
 
@@ -11,16 +11,40 @@ interface User {
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
+  // 每次路由变化时检查登录状态
   useEffect(() => {
-    if (isLoggedIn()) {
-      setUser(getUser());
-    }
-  }, []);
+    const checkLogin = () => {
+      if (isLoggedIn()) {
+        const userData = getUser();
+        setUser(userData);
+      } else {
+        setUser(null);
+      }
+    };
+    
+    checkLogin();
+    
+    // 监听storage变化（其他标签页登录/退出）
+    window.addEventListener('storage', checkLogin);
+    
+    // 监听自定义登录事件
+    window.addEventListener('userLogin', checkLogin);
+    window.addEventListener('userLogout', checkLogin);
+    
+    return () => {
+      window.removeEventListener('storage', checkLogin);
+      window.removeEventListener('userLogin', checkLogin);
+      window.removeEventListener('userLogout', checkLogin);
+    };
+  }, [location.pathname]); // 路由变化时重新检查
 
   const handleLogout = () => {
     clearAuth();
     setUser(null);
+    // 触发退出事件
+    window.dispatchEvent(new Event('userLogout'));
     navigate('/');
   };
 
@@ -45,17 +69,31 @@ export default function Navbar() {
               {isAdmin && (
                 <Link to="/admin" className="hover:text-red-400 transition">🔧 审核</Link>
               )}
-              <span className="text-gray-400">|</span>
-              <span className="text-red-400">{user.username}</span>
+              <span className="text-gray-500 mx-2">|</span>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center text-white font-bold">
+                  {user.avatar ? (
+                    <img src={user.avatar} alt={user.username} className="w-8 h-8 rounded-full" />
+                  ) : (
+                    user.username.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <span className="text-white font-medium">{user.username}</span>
+              </div>
               <button
                 onClick={handleLogout}
-                className="text-gray-400 hover:text-white text-sm"
+                className="bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded text-sm text-gray-300 hover:text-white transition"
               >
                 退出
               </button>
             </>
           ) : (
-            <Link to="/login" className="hover:text-red-400 transition">登录</Link>
+            <Link 
+              to="/login" 
+              className="bg-red-500 hover:bg-red-600 px-4 py-2 rounded font-medium transition"
+            >
+              登录
+            </Link>
           )}
         </div>
       </div>
