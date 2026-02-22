@@ -87,6 +87,7 @@ async function initDatabase() {
         target_y DECIMAL(5,2) NOT NULL,
         video_url TEXT,
         video_path TEXT,
+        image_url TEXT,
         description TEXT,
         author VARCHAR(50),
         user_id INT,
@@ -95,6 +96,13 @@ async function initDatabase() {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     console.log('✅ Lineups table initialized');
+    
+    // 检查并添加image_url列（兼容旧数据）
+    try {
+      await pool.query(`ALTER TABLE lineups ADD COLUMN image_url TEXT`);
+    } catch (err) {
+      // 列已存在，忽略错误
+    }
 
     // 创建收藏表
     await pool.query(`
@@ -371,7 +379,7 @@ app.get('/api/lineups/:id', optionalAuth, async (req, res) => {
 
 // 创建lineup（需要登录，默认pending状态需要审核）
 app.post('/api/lineups', requireAuth, async (req, res) => {
-  const { agent, map, ability, position_x, position_y, target_x, target_y, video_url, description } = req.body;
+  const { agent, map, ability, position_x, position_y, target_x, target_y, video_url, image_url, description } = req.body;
 
   if (!agent || !map || !ability) {
     return res.status(400).json({ error: '角色、地图和技能不能为空' });
@@ -382,11 +390,12 @@ app.post('/api/lineups', requireAuth, async (req, res) => {
     const author = user ? user.username : 'Anonymous';
 
     const [result] = await pool.query(`
-      INSERT INTO lineups (agent, map, ability, position_x, position_y, target_x, target_y, video_url, description, author, user_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-    `, [agent, map, ability, position_x || 0.5, position_y || 0.5, target_x || 0.5, target_y || 0.5, video_url || '', description || '', author, req.user.id]);
+      INSERT INTO lineups (agent, map, ability, position_x, position_y, target_x, target_y, video_url, image_url, description, author, user_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    `, [agent, map, ability, position_x || 0.5, position_y || 0.5, target_x || 0.5, target_y || 0.5, video_url || '', image_url || '', description || '', author, req.user.id]);
 
     res.json({
+      success: true,
       id: result.insertId,
       message: 'Lineup已提交，等待审核',
       author,
@@ -576,6 +585,92 @@ app.post('/api/download', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Download error:', err);
     res.status(500).json({ error: '下载失败: ' + err.message });
+  }
+});
+
+// ============ AI视频总结API ============
+
+// AI总结视频内容
+app.post('/api/ai-summarize', async (req, res) => {
+  const { url } = req.body;
+
+  if (!url) {
+    return res.status(400).json({ error: '视频URL不能为空' });
+  }
+
+  try {
+    // 获取视频信息
+    let videoInfo = '';
+    
+    if (url.includes('bilibili.com') || url.includes('b23.tv')) {
+      // B站视频 - 使用yt-dlp获取标题和描述
+      const { stdout } = await execAsync(`yt-dlp --get-title --get-description "${url}" 2>/dev/null || echo "无法获取"`);
+      videoInfo = stdout;
+    } else if (url.includes('youtube.com') || url.includes('youtu.be')) {
+      // YouTube视频
+      const { stdout } = await execAsync(`yt-dlp --get-title --get-description "${url}" 2>/dev/null || echo "无法获取"`);
+      videoInfo = stdout;
+    } else {
+      return res.status(400).json({ error: '支持YouTube和B站视频' });
+    }
+
+    // 调用智谱AI API进行总结
+    const apiKey = process.env.ZHIPU_API_KEY || '';
+    
+    if (!apiKey) {
+      // 没有API Key，返回基本信息
+      return res.json({
+        success: true,
+        summary: '💡 AI总结功能需要配置智谱API Key\n\n' + 
+                 '视频信息:\n' + videoInfo +
+                 '\n\n请在服务器设置环境变量 ZHIPU_API_KEY',
+        videoInfo
+      });
+    }
+
+    // 调用智谱GLM-4 API
+    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'glm-4',
+        messages: [
+          {
+            role: 'system',
+            content: '你是Valorant游戏专家，擅长分析和总结游戏视频内容。请用简洁的中文总结视频的主要内容和教学要点。'
+          },
+          {
+            role: 'user',
+            content: `请总结这个Valorant视频的内容:\n\n${videoInfo}`
+          }
+        ],
+        max_tokens: 1000
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.choices && data.choices[0]) {
+      res.json({
+        success: true,
+        summary: data.choices[0].message.content,
+        videoInfo,
+        model: 'glm-4'
+      });
+    } else {
+      res.json({
+        success: true,
+        summary: 'AI总结失败，请稍后重试',
+        videoInfo
+      });
+    }
+    
+  } catch (err) {
+    console.error('AI summarize error:', err);
+    res.status(500).json({ error: 'AI总结失败: ' + err.message });
   }
 });
 

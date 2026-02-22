@@ -122,4 +122,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ url, type }),
     }),
+  
+  // AI视频总结
+  aiSummarize: (url: string) =>
+    request('/ai-summarize', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    }),
 };

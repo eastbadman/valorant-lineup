@@ -64,6 +64,7 @@ export default function Navbar() {
           
           {user ? (
             <>
+              <Link to="/upload" className="hover:text-red-400 transition">📤 上传</Link>
               <Link to="/favorites" className="hover:text-red-400 transition">⭐ 收藏</Link>
               <Link to="/download" className="hover:text-red-400 transition">📹 下载</Link>
               {isAdmin && (

@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import VideoDownload from './pages/VideoDownload';
 import Favorites from './pages/Favorites';
 import Admin from './pages/Admin';
+import Upload from './pages/Upload';
 import Navbar from './components/Navbar';
 import './index.css';
 
@@ -28,6 +29,14 @@ export default function App() {
           <Route path="/lineup/:id" element={<LineupDetail />} />
           <Route path="/search" element={<Search />} />
           <Route path="/login" element={<Login />} />
+          <Route 
+            path="/upload" 
+            element={
+              <ProtectedRoute>
+                <Upload />
+              </ProtectedRoute>
+            } 
+          />
           <Route 
             path="/favorites" 
             element={
