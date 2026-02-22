@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { api, isLoggedIn, clearAuth, getUser } from '../api';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { api, isLoggedIn } from '../api';
 
 interface Lineup {
   id: number;

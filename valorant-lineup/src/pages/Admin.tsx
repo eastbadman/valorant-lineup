@@ -32,7 +32,7 @@ export default function Admin() {
   const fetchPending = async () => {
     setLoading(true);
     try {
-      const data = await api.getPending();
+      const data = await api.getPending() as PendingLineup[];
       setPending(data);
     } catch (err) {
       console.error('Failed to fetch pending:', err);
