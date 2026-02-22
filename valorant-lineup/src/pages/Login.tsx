@@ -15,9 +15,9 @@ export default function Login() {
     setLoading(true);
     
     try {
-      const data = isRegister 
-        ? await api.register(formData.username, formData.password, formData.email)
-        : await api.login(formData.username, formData.password) as { success: boolean; user: any; token: string };
+      const data = await (isRegister 
+        ? api.register(formData.username, formData.password, formData.email)
+        : api.login(formData.username, formData.password)) as { success: boolean; user: any; token: string };
       
       if (data.success) {
         // 保存用户信息和token
