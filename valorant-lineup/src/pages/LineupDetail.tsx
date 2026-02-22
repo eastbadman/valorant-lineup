@@ -34,7 +34,7 @@ export default function LineupDetail() {
   const fetchLineup = async () => {
     setLoading(true);
     try {
-      const data = await api.getLineup(Number(id));
+      const data = await api.getLineup(Number(id)) as Lineup;
       setLineup(data);
     } catch (err) {
       console.error('Failed to fetch lineup:', err);

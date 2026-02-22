@@ -37,7 +37,7 @@ export default function Home() {
       if (filters.map) params.map = filters.map;
       if (filters.ability) params.ability = filters.ability;
       
-      const data = await api.getLineups(Object.keys(params).length > 0 ? params : undefined);
+      const data = await api.getLineups(Object.keys(params).length > 0 ? params : undefined) as Lineup[];
       setLineups(data);
     } catch (err) {
       console.error('Failed to fetch lineups:', err);

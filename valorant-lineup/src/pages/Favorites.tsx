@@ -30,7 +30,7 @@ export default function Favorites() {
   const fetchFavorites = async () => {
     setLoading(true);
     try {
-      const data = await api.getFavorites();
+      const data = await api.getFavorites() as Lineup[];
       setFavorites(data);
     } catch (err) {
       console.error('Failed to fetch favorites:', err);
