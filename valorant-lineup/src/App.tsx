@@ -4,6 +4,8 @@ import LineupDetail from './pages/LineupDetail';
 import Search from './pages/Search';
 import Login from './pages/Login';
 import VideoDownload from './pages/VideoDownload';
+import Favorites from './pages/Favorites';
+import Admin from './pages/Admin';
 import Navbar from './components/Navbar';
 import './index.css';
 
@@ -27,10 +29,26 @@ export default function App() {
           <Route path="/search" element={<Search />} />
           <Route path="/login" element={<Login />} />
           <Route 
+            path="/favorites" 
+            element={
+              <ProtectedRoute>
+                <Favorites />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/download" 
             element={
               <ProtectedRoute>
                 <VideoDownload />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute>
+                <Admin />
               </ProtectedRoute>
             } 
           />

@@ -1,5 +1,10 @@
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+// JWT密钥（生产环境应该使用环境变量）
+const JWT_SECRET = 'valorant-lineup-secret-key-2026';
+const JWT_EXPIRES_IN = '7d';
 
 // MySQL 连接配置
 const pool = mysql.createPool({
@@ -12,6 +17,24 @@ const pool = mysql.createPool({
   connectionLimit: 10,
   queueLimit: 0
 });
+
+// 生成JWT Token
+export function generateToken(user) {
+  return jwt.sign(
+    { id: user.id, username: user.username },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
+
+// 验证JWT Token
+export function verifyToken(token) {
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch (err) {
+    return null;
+  }
+}
 
 // 用户表
 export const users = {
@@ -73,9 +96,10 @@ export const users = {
         return { success: false, error: '用户名或密码错误' };
       }
 
-      // 返回用户信息（不包含密码）
+      // 返回用户信息（不包含密码）+ JWT token
       const { password: _, ...userWithoutPassword } = user;
-      return { success: true, user: userWithoutPassword };
+      const token = generateToken(userWithoutPassword);
+      return { success: true, user: userWithoutPassword, token };
     } catch (err) {
       return { success: false, error: err.message };
     }

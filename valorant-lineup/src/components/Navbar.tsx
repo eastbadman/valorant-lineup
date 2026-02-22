@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { getUser, clearAuth, isLoggedIn } from '../api';
 
 interface User {
   id: number;
@@ -12,17 +13,19 @@ export default function Navbar() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const saved = localStorage.getItem('user');
-    if (saved) {
-      setUser(JSON.parse(saved));
+    if (isLoggedIn()) {
+      setUser(getUser());
     }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
+    clearAuth();
     setUser(null);
     navigate('/');
   };
+
+  // 判断是否是管理员
+  const isAdmin = user && ['admin', 'eastbadman'].includes(user.username);
 
   return (
     <nav className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
@@ -37,7 +40,11 @@ export default function Navbar() {
           
           {user ? (
             <>
+              <Link to="/favorites" className="hover:text-red-400 transition">⭐ 收藏</Link>
               <Link to="/download" className="hover:text-red-400 transition">📹 下载</Link>
+              {isAdmin && (
+                <Link to="/admin" className="hover:text-red-400 transition">🔧 审核</Link>
+              )}
               <span className="text-gray-400">|</span>
               <span className="text-red-400">{user.username}</span>
               <button

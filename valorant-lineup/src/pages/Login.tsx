@@ -1,31 +1,33 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api, setAuth } from '../api';
 
 export default function Login() {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({ username: '', password: '', email: '' });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setLoading(true);
     
-    const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
-    });
-    
-    const data = await res.json();
-    
-    if (data.success) {
-      // 保存用户信息到localStorage
-      localStorage.setItem('user', JSON.stringify(data.user));
-      navigate('/');
-    } else {
-      setError(data.error);
+    try {
+      const data = isRegister 
+        ? await api.register(formData.username, formData.password, formData.email)
+        : await api.login(formData.username, formData.password);
+      
+      if (data.success) {
+        // 保存用户信息和token
+        setAuth(data.user, data.token);
+        navigate('/');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -51,6 +53,7 @@ export default function Login() {
               value={formData.username}
               onChange={(e) => setFormData({ ...formData, username: e.target.value })}
               required
+              disabled={loading}
             />
           </div>
           
@@ -62,6 +65,7 @@ export default function Login() {
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
               required
+              disabled={loading}
             />
           </div>
           
@@ -73,15 +77,17 @@ export default function Login() {
                 className="w-full bg-gray-700 rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-red-500"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                disabled={loading}
               />
             </div>
           )}
           
           <button
             type="submit"
-            className="w-full bg-red-500 hover:bg-red-600 py-2 rounded font-semibold transition"
+            className="w-full bg-red-500 hover:bg-red-600 py-2 rounded font-semibold transition disabled:opacity-50"
+            disabled={loading}
           >
-            {isRegister ? '注册' : '登录'}
+            {loading ? '处理中...' : (isRegister ? '注册' : '登录')}
           </button>
         </form>
         
@@ -90,6 +96,7 @@ export default function Login() {
           <button
             onClick={() => setIsRegister(!isRegister)}
             className="text-red-400 hover:text-red-300 ml-1"
+            disabled={loading}
           >
             {isRegister ? '去登录' : '去注册'}
           </button>
