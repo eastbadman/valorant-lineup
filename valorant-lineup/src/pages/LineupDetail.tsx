@@ -49,8 +49,10 @@ export default function LineupDetail() {
       return;
     }
     
+    if (!lineup) return;
+    
     try {
-      if (lineup?.is_liked) {
+      if (lineup.is_liked) {
         await api.removeLike(lineup.id);
       } else {
         await api.addLike(lineup.id);
@@ -67,8 +69,10 @@ export default function LineupDetail() {
       return;
     }
     
+    if (!lineup) return;
+    
     try {
-      if (lineup?.is_favorited) {
+      if (lineup.is_favorited) {
         await api.removeFavorite(lineup.id);
       } else {
         await api.addFavorite(lineup.id);
